@@ -14,16 +14,404 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      communities: {
+        Row: {
+          branch_category: string | null
+          created_at: string | null
+          creator_id: string | null
+          description: string | null
+          id: string
+          invite_code: string | null
+          is_default: boolean | null
+          is_public: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          branch_category?: string | null
+          created_at?: string | null
+          creator_id?: string | null
+          description?: string | null
+          id?: string
+          invite_code?: string | null
+          is_default?: boolean | null
+          is_public?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          branch_category?: string | null
+          created_at?: string | null
+          creator_id?: string | null
+          description?: string | null
+          id?: string
+          invite_code?: string | null
+          is_default?: boolean | null
+          is_public?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communities_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_members: {
+        Row: {
+          community_id: string
+          id: string
+          joined_at: string | null
+          user_id: string
+        }
+        Insert: {
+          community_id: string
+          id?: string
+          joined_at?: string | null
+          user_id: string
+        }
+        Update: {
+          community_id?: string
+          id?: string
+          joined_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_members_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interests: {
+        Row: {
+          created_at: string | null
+          id: string
+          interest_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          interest_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          interest_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          age: number | null
+          avatar_url: string | null
+          bio: string | null
+          branch: string
+          coins: number | null
+          college: string
+          created_at: string | null
+          email: string
+          full_name: string
+          gender: string | null
+          id: string
+          sleep_schedule: string | null
+          updated_at: string | null
+          upvotes: number | null
+          year: number | null
+        }
+        Insert: {
+          age?: number | null
+          avatar_url?: string | null
+          bio?: string | null
+          branch: string
+          coins?: number | null
+          college: string
+          created_at?: string | null
+          email: string
+          full_name: string
+          gender?: string | null
+          id: string
+          sleep_schedule?: string | null
+          updated_at?: string | null
+          upvotes?: number | null
+          year?: number | null
+        }
+        Update: {
+          age?: number | null
+          avatar_url?: string | null
+          bio?: string | null
+          branch?: string
+          coins?: number | null
+          college?: string
+          created_at?: string | null
+          email?: string
+          full_name?: string
+          gender?: string | null
+          id?: string
+          sleep_schedule?: string | null
+          updated_at?: string | null
+          upvotes?: number | null
+          year?: number | null
+        }
+        Relationships: []
+      }
+      project_members: {
+        Row: {
+          id: string
+          joined_at: string | null
+          participation_type: Database["public"]["Enums"]["participation_type"]
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string | null
+          participation_type: Database["public"]["Enums"]["participation_type"]
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string | null
+          participation_type?: Database["public"]["Enums"]["participation_type"]
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          host_id: string
+          id: string
+          skills_required: string[] | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          host_id: string
+          id?: string
+          skills_required?: string[] | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          host_id?: string
+          id?: string
+          skills_required?: string[] | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skills: {
+        Row: {
+          created_at: string | null
+          id: string
+          skill_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          skill_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          skill_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skills_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      startup_members: {
+        Row: {
+          id: string
+          joined_at: string | null
+          role: string | null
+          startup_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string | null
+          role?: string | null
+          startup_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string | null
+          role?: string | null
+          startup_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "startup_members_startup_id_fkey"
+            columns: ["startup_id"]
+            isOneToOne: false
+            referencedRelation: "startups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "startup_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      startups: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          founder_id: string
+          id: string
+          looking_for: string | null
+          name: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          founder_id: string
+          id?: string
+          looking_for?: string | null
+          name: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          founder_id?: string
+          id?: string
+          looking_for?: string | null
+          name?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "startups_founder_id_fkey"
+            columns: ["founder_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_invite_code: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
+      participation_type: "host" | "participant"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +538,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+      participation_type: ["host", "participant"],
+    },
   },
 } as const
