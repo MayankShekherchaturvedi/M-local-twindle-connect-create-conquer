@@ -135,13 +135,19 @@ export type Database = {
           coins: number | null
           college: string
           created_at: string | null
+          domain: string | null
           email: string
           full_name: string
           gender: string | null
+          hobbies: string | null
           id: string
+          organization: string | null
+          persona: string | null
           sleep_schedule: string | null
+          specialization: string | null
           updated_at: string | null
           upvotes: number | null
+          username: string | null
           year: number | null
         }
         Insert: {
@@ -152,13 +158,19 @@ export type Database = {
           coins?: number | null
           college: string
           created_at?: string | null
+          domain?: string | null
           email: string
           full_name: string
           gender?: string | null
+          hobbies?: string | null
           id: string
+          organization?: string | null
+          persona?: string | null
           sleep_schedule?: string | null
+          specialization?: string | null
           updated_at?: string | null
           upvotes?: number | null
+          username?: string | null
           year?: number | null
         }
         Update: {
@@ -169,13 +181,19 @@ export type Database = {
           coins?: number | null
           college?: string
           created_at?: string | null
+          domain?: string | null
           email?: string
           full_name?: string
           gender?: string | null
+          hobbies?: string | null
           id?: string
+          organization?: string | null
+          persona?: string | null
           sleep_schedule?: string | null
+          specialization?: string | null
           updated_at?: string | null
           upvotes?: number | null
+          username?: string | null
           year?: number | null
         }
         Relationships: []
