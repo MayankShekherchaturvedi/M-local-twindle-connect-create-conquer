@@ -4,16 +4,24 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+
+// Main Pages
 import Home from "./pages/Home";
-import Connect from "./pages/Connect";
-import Community from "./pages/Community";
-import CommunityDetail from "./pages/CommunityDetail"; // Import the new page
 import Feed from "./pages/Feed";
 import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+
+// Community Pages
+import Community from "./pages/Community";
+import CommunityDetail from "./pages/CommunityDetail";
+
+// Connect Pages (Projects & Startups)
+import Connect from "./pages/Connect";
 import CreateProject from "./pages/connect/CreateProject";
 import ProjectDetails from "./pages/connect/ProjectDetails";
+import CreateStartup from "./pages/connect/CreateStartup";
+import StartupDetails from "./pages/connect/StartupDetails";
 
 const queryClient = new QueryClient();
 
@@ -31,11 +39,14 @@ const App = () => (
             <Route path="/connect" element={<Connect />} />
             <Route path="/connect/create-project" element={<CreateProject />} />
             <Route path="/connect/projects/:projectId" element={<ProjectDetails />} />
+            <Route path="/connect/create-startup" element={<CreateStartup />} />
+            <Route path="/connect/startups/:startupId" element={<StartupDetails />} />
             
             {/* Community Section Routes */}
             <Route path="/community" element={<Community />} />
-            <Route path="/community/:id" element={<CommunityDetail />} /> {/* Chat Page */}
+            <Route path="/community/:id" element={<CommunityDetail />} />
             
+            {/* Other Routes */}
             <Route path="/feed" element={<Feed />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/auth/*" element={<Auth />} />
