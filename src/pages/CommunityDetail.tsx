@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Send, ArrowLeft, MessageSquare } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 interface Post {
   id: string;
@@ -25,16 +25,17 @@ interface Post {
 const CommunityDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  // 1. FIX: Grab 'loading' state to prevent premature redirect
-  const { user, loading } = useAuth(); 
+  const { user, loading } = useAuth(); // Check loading state
+  const { toast } = useToast();
+  
   const [community, setCommunity] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // 2. FIX: Don't redirect if we are still loading the session
-    if (loading) return; 
+    // Prevent redirecting while auth is still loading
+    if (loading) return;
 
     if (!user) {
         toast({ title: "Access Denied", description: "Please login to view this community.", variant: "destructive" });
@@ -48,16 +49,17 @@ const CommunityDetail = () => {
     supabase.from('communities').select('*').eq('id', id).single()
       .then(({ data, error }) => {
         if (error) {
+          toast({ title: "Error", description: "Community not found", variant: "destructive" });
           navigate("/community");
         } else {
           setCommunity(data);
         }
       });
 
-    // Fetch initial posts
+    // Fetch messages
     fetchPosts();
 
-    // Subscribe to new messages
+    // Subscribe to Realtime messages
     const channel = supabase
       .channel('public:community_posts')
       .on('postgres_changes', { 
@@ -65,7 +67,7 @@ const CommunityDetail = () => {
         schema: 'public', 
         table: 'community_posts', 
         filter: `community_id=eq.${id}` 
-      }, () => {
+      }, (payload) => {
         fetchPosts();
       })
       .subscribe();
@@ -76,17 +78,21 @@ const CommunityDetail = () => {
   const fetchPosts = async () => {
     const { data } = await supabase
       .from('community_posts')
-      .select('*, profiles(full_name, username)')
+      .select(`
+        *,
+        profiles (full_name, username)
+      `)
       .eq('community_id', id)
       .order('created_at', { ascending: true });
     
     if (data) {
       setPosts(data);
+      // Auto-scroll to bottom
       setTimeout(() => scrollRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     }
   };
 
-  const sendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !user) return;
 
@@ -100,21 +106,21 @@ const CommunityDetail = () => {
       toast({ title: "Error", description: "Failed to send message", variant: "destructive" });
     } else {
       setNewMessage("");
-      // No need to manually fetchPosts() here if Realtime is working, 
-      // but keeping it doesn't hurt.
-      fetchPosts(); 
+      fetchPosts(); // Instant update
     }
   };
 
-  // 3. FIX: Show a loading screen instead of redirecting
-  if (loading) return <div className="h-screen w-full flex items-center justify-center">Loading...</div>;
-  if (!community) return <div className="h-screen w-full flex items-center justify-center">Loading Community...</div>;
+  // Show loading screen while checking session or data
+  if (loading || !community) {
+    return <div className="h-screen w-full flex items-center justify-center">Loading...</div>;
+  }
 
   return (
+    // FIX: Use h-screen to lock the page height
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       <Navbar />
       
-      {/* 4. FIX: Use flex-1 to fill EXACTLY the remaining space */}
+      {/* Main Content Area - Grows to fill space */}
       <div className="flex-1 container mx-auto px-4 py-4 flex flex-col max-w-4xl min-h-0">
         
         {/* Header */}
@@ -124,8 +130,8 @@ const CommunityDetail = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-primary truncate max-w-[200px] sm:max-w-md">{community.name}</h1>
-              <p className="text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-md">{community.description}</p>
+              <h1 className="text-xl font-bold text-primary truncate">{community.name}</h1>
+              <p className="text-xs text-muted-foreground line-clamp-1">{community.description}</p>
             </div>
           </div>
           {community.invite_code && (
@@ -135,35 +141,40 @@ const CommunityDetail = () => {
           )}
         </div>
 
-        {/* Chat Interface - Fills remaining height */}
+        {/* Chat Card - Fills remaining height */}
         <Card className="flex-1 flex flex-col overflow-hidden border-2 shadow-sm min-h-0">
           <div className="flex-none p-3 border-b bg-muted/30 flex items-center gap-2 text-sm font-medium text-primary">
-            <MessageSquare className="h-4 w-4" /> Chat Room
+            <MessageSquare className="h-4 w-4" /> Community Forum
           </div>
 
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
               {posts.length === 0 ? (
                 <div className="text-center text-muted-foreground py-10 text-sm">
-                  No messages yet. Be the first to say hello!
+                  No messages yet. Start the conversation!
                 </div>
               ) : (
                 posts.map((post) => (
-                  <div key={post.id} className={`flex gap-3 ${post.user_id === user?.id ? "flex-row-reverse" : ""}`}>
+                  <div 
+                    key={post.id} 
+                    className={`flex gap-3 ${post.user_id === user?.id ? "flex-row-reverse" : ""}`}
+                  >
                     <Avatar className="h-8 w-8 mt-1">
                       <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
-                        {post.profiles?.full_name?.substring(0, 2).toUpperCase() || "??"}
+                        {post.profiles?.full_name?.substring(0, 2).toUpperCase() || "CN"}
                       </AvatarFallback>
                     </Avatar>
-                    <div className={`flex flex-col max-w-[80%] ${post.user_id === user?.id ? "items-end" : "items-start"}`}>
+                    <div className={`flex flex-col max-w-[75%] ${post.user_id === user?.id ? "items-end" : "items-start"}`}>
                       <span className="text-[10px] text-muted-foreground mb-1 px-1">
                         {post.profiles?.full_name}
                       </span>
-                      <div className={`p-3 rounded-lg text-sm shadow-sm break-words ${
-                        post.user_id === user?.id 
-                          ? "bg-primary text-primary-foreground rounded-tr-none" 
-                          : "bg-muted text-foreground rounded-tl-none"
-                      }`}>
+                      <div 
+                        className={`p-3 rounded-lg text-sm shadow-sm break-words ${
+                          post.user_id === user?.id 
+                            ? "bg-primary text-primary-foreground rounded-tr-none" 
+                            : "bg-muted text-foreground rounded-tl-none"
+                        }`}
+                      >
                         {post.content}
                       </div>
                     </div>
@@ -174,9 +185,8 @@ const CommunityDetail = () => {
             </div>
           </ScrollArea>
 
-          {/* Input Area - Pinned to bottom by flex layout */}
           <div className="flex-none p-4 border-t bg-background">
-            <form onSubmit={sendMessage} className="flex gap-2">
+            <form onSubmit={handleSendMessage} className="flex gap-2">
               <Input 
                 value={newMessage} 
                 onChange={(e) => setNewMessage(e.target.value)} 
