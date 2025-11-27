@@ -22,6 +22,7 @@ import CreateProject from "./pages/connect/CreateProject";
 import ProjectDetails from "./pages/connect/ProjectDetails";
 import CreateStartup from "./pages/connect/CreateStartup";
 import StartupDetails from "./pages/connect/StartupDetails";
+import ManageApplications from "./pages/connect/ManageApplications";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,8 @@ const App = () => (
             <Route path="/connect/projects/:projectId" element={<ProjectDetails />} />
             <Route path="/connect/create-startup" element={<CreateStartup />} />
             <Route path="/connect/startups/:startupId" element={<StartupDetails />} />
+            <Route path="/connect/projects/:id/applications" element={<ManageApplications />} />
+            <Route path="/connect/startups/:id/applications" element={<ManageApplications />} />
             
             {/* Community Section Routes */}
             <Route path="/community" element={<Community />} />
