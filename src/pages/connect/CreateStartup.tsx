@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge"; // <--- THIS WAS MISSING
 
 const CreateStartup = () => {
   const navigate = useNavigate();
