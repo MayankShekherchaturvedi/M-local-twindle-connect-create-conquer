@@ -1,409 +1,353 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Search, Plus } from "lucide-react";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"; // Import ToggleGroup
+import { Search, Plus, Filter, Users, Clock, Rocket, Building2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
 
 const Connect = () => {
-  const [projects, setProjects] = useState<any[]>([]);
-  const [startups, setStartups] = useState<any[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showCreateProject, setShowCreateProject] = useState(false);
-  const [showCreateStartup, setShowCreateStartup] = useState(false);
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
 
-  const [newProject, setNewProject] = useState({
-    title: "",
-    description: "",
-    skills: ""
-  });
+  const [projects, setProjects] = useState<any[]>([]);
+  const [startups, setStartups] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [newStartup, setNewStartup] = useState({
-    name: "",
-    description: "",
-    lookingFor: ""
-  });
+  // Joined Status
+  const [joinedProjectIds, setJoinedProjectIds] = useState<Set<string>>(new Set());
+  const [joinedStartupIds, setJoinedStartupIds] = useState<Set<string>>(new Set());
+
+  // Filters
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("All");
+  const [sort, setSort] = useState("newest");
+  const [activeTab, setActiveTab] = useState("projects");
+  
+  // NEW: View Mode Toggles
+  const [projectViewMode, setProjectViewMode] = useState("all"); // 'all' (Contributor) | 'hosting' (Host)
+  const [startupViewMode, setStartupViewMode] = useState("all"); // 'all' (Partner) | 'founder' (Founder)
 
   useEffect(() => {
-    fetchProjects();
-    fetchStartups();
-  }, []);
+    fetchData();
+    
+    // Realtime subscriptions...
+    const projectSub = supabase.channel('public:projects')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'projects' }, fetchData)
+      .subscribe();
+      
+    const startupSub = supabase.channel('public:startups')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'startups' }, fetchData)
+      .subscribe();
 
-  const fetchProjects = async () => {
-    const { data, error } = await supabase
+    return () => {
+      supabase.removeChannel(projectSub);
+      supabase.removeChannel(startupSub);
+    };
+  }, [sort]);
+
+  useEffect(() => {
+    if (user) fetchJoinedStatus();
+  }, [user]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    
+    // Fetch Projects
+    let pQuery = supabase
       .from('projects')
-      .select(`
-        *,
-        host:profiles!projects_host_id_fkey(full_name),
-        project_members(count)
-      `)
-      .order('created_at', { ascending: false });
+      .select(`*, host:profiles!projects_host_id_fkey(full_name), project_roles(count), project_members(count)`);
     
-    if (!error && data) {
-      setProjects(data);
-    }
-  };
+    if (sort === 'newest') pQuery = pQuery.order('created_at', { ascending: false });
+    else pQuery = pQuery.order('created_at', { ascending: true });
 
-  const fetchStartups = async () => {
-    const { data, error } = await supabase
+    const { data: pData } = await pQuery;
+    if (pData) setProjects(pData);
+
+    // Fetch Startups
+    let sQuery = supabase
       .from('startups')
-      .select(`
-        *,
-        founder:profiles!startups_founder_id_fkey(full_name),
-        startup_members(count)
-      `)
-      .order('created_at', { ascending: false });
-    
-    if (!error && data) {
-      setStartups(data);
-    }
+      .select(`*, founder:profiles!startups_founder_id_fkey(full_name), startup_members(count)`);
+
+    if (sort === 'newest') sQuery = sQuery.order('created_at', { ascending: false });
+    else sQuery = sQuery.order('created_at', { ascending: true });
+
+    const { data: sData } = await sQuery;
+    if (sData) setStartups(sData);
+
+    setLoading(false);
   };
 
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const fetchJoinedStatus = async () => {
+    if (!user) return;
+    const { data: pMembers } = await supabase.from('project_members').select('project_id').eq('user_id', user.id);
+    if (pMembers) setJoinedProjectIds(new Set(pMembers.map(i => i.project_id)));
+
+    const { data: sMembers } = await supabase.from('startup_members').select('startup_id').eq('user_id', user.id);
+    if (sMembers) setJoinedStartupIds(new Set(sMembers.map(i => i.startup_id)));
+  };
+
+  const requireLogin = () => {
     if (!user) {
+      toast({ title: "Login Required", description: "Please login to create or join.", variant: "destructive" });
       navigate('/auth');
-      return;
+      return false;
     }
-
-    const { error } = await supabase.from('projects').insert({
-      title: newProject.title,
-      description: newProject.description,
-      host_id: user.id,
-      skills_required: newProject.skills.split(',').map(s => s.trim())
-    });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    } else {
-      toast({
-        title: "Success!",
-        description: "Your project has been created."
-      });
-      setShowCreateProject(false);
-      setNewProject({ title: "", description: "", skills: "" });
-      fetchProjects();
-    }
+    return true;
   };
 
-  const handleCreateStartup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) {
-      navigate('/auth');
-      return;
-    }
+  // NEW: Enhanced Filter Logic
+  const filterList = (list: any[], type: "project" | "startup") => {
+    return list.filter(item => {
+      // 1. Search & Category
+      const matchesSearch = item.title?.toLowerCase().includes(search.toLowerCase()) || 
+                            item.name?.toLowerCase().includes(search.toLowerCase()) ||
+                            item.description?.toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = category === "All" || item.category === category;
 
-    const { error } = await supabase.from('startups').insert({
-      name: newStartup.name,
-      description: newStartup.description,
-      founder_id: user.id,
-      looking_for: newStartup.lookingFor
+      // 2. View Mode (Host/Founder vs Contributor/Partner)
+      let matchesView = true;
+      if (user) {
+        if (type === "project") {
+          if (projectViewMode === "hosting") {
+            // Show only MY projects
+            matchesView = item.host_id === user.id;
+          } else {
+            // Show projects I am NOT hosting (Contributor view)
+            matchesView = item.host_id !== user.id;
+          }
+        } else {
+          if (startupViewMode === "founder") {
+            // Show only MY startups
+            matchesView = item.founder_id === user.id;
+          } else {
+            // Show startups I am NOT founding (Partner view)
+            matchesView = item.founder_id !== user.id;
+          }
+        }
+      }
+
+      return matchesSearch && matchesCategory && matchesView;
     });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    } else {
-      toast({
-        title: "Success!",
-        description: "Your startup has been registered."
-      });
-      setShowCreateStartup(false);
-      setNewStartup({ name: "", description: "", lookingFor: "" });
-      fetchStartups();
-    }
   };
 
-  const handleJoinProject = async (projectId: string) => {
-    if (!user) {
-      navigate('/auth');
-      return;
-    }
-
-    const { error } = await supabase.from('project_members').insert({
-      project_id: projectId,
-      user_id: user.id,
-      participation_type: 'participant'
-    });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    } else {
-      toast({
-        title: "Joined!",
-        description: "You've successfully joined the project as a participant."
-      });
-    }
-  };
-
-  const handleJoinStartup = async (startupId: string) => {
-    if (!user) {
-      navigate('/auth');
-      return;
-    }
-
-    const { error } = await supabase.from('startup_members').insert({
-      startup_id: startupId,
-      user_id: user.id,
-      role: 'member'
-    });
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    } else {
-      toast({
-        title: "Applied!",
-        description: "Your application has been submitted."
-      });
-    }
-  };
-
-  const filteredProjects = projects.filter(p =>
-    p.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const filteredStartups = startups.filter(s =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProjects = filterList(projects, "project");
+  const filteredStartups = filterList(startups, "startup");
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-
-      <div className="container mx-auto px-6 py-12">
-        <Tabs defaultValue="projects" className="w-full">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-12">
-            <TabsTrigger value="projects" className="rounded-full">
-              Projects
-            </TabsTrigger>
-            <TabsTrigger value="startups" className="rounded-full">
-              Startups
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="projects">
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-primary mb-4">Explore Projects</h1>
-              <p className="text-muted-foreground mb-6">Host your own project or join as a participant</p>
-              <div className="flex gap-4 flex-wrap items-center">
-                <div className="relative flex-1 max-w-2xl">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search projects..."
-                    className="pl-12 rounded-full"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                <Dialog open={showCreateProject} onOpenChange={setShowCreateProject}>
-                  <DialogTrigger asChild>
-                    <Button className="rounded-full shadow-lg hover:shadow-xl transition-all">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Host a Project
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Create New Project</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleCreateProject} className="space-y-4">
-                      <div>
-                        <Label>Project Title</Label>
-                        <Input
-                          value={newProject.title}
-                          onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
-                          placeholder="AI Chatbot"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Description</Label>
-                        <Textarea
-                          value={newProject.description}
-                          onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                          placeholder="Building an AI-powered customer support chatbot..."
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Skills Required (comma-separated)</Label>
-                        <Input
-                          value={newProject.skills}
-                          onChange={(e) => setNewProject({ ...newProject, skills: e.target.value })}
-                          placeholder="React, Node.js, MongoDB"
-                        />
-                      </div>
-                      <Button type="submit" className="w-full">Create Project</Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map((project) => (
-                <Card key={project.id} className="p-6 hover:shadow-xl transition-all duration-300 border-2">
-                  <h3 className="text-2xl font-bold text-primary mb-2">{project.title}</h3>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Host: <span className="font-semibold">{project.host?.full_name || "Unknown"}</span>
-                  </p>
-                  <p className="text-muted-foreground mb-4 line-clamp-3">
-                    {project.description}
-                  </p>
-                  {project.skills_required && project.skills_required.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {project.skills_required.slice(0, 3).map((skill: string, idx: number) => (
-                        <span key={idx} className="px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-xs font-medium">
-                          {skill}
-                        </span>
-                      ))}
-                      {project.skills_required.length > 3 && (
-                        <span className="px-3 py-1 bg-muted text-muted-foreground rounded-full text-xs">
-                          +{project.skills_required.length - 3} more
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <Button
-                    variant="default"
-                    className="w-full rounded-full"
-                    onClick={() => handleJoinProject(project.id)}
-                  >
-                    Join as Participant
-                  </Button>
-                </Card>
-              ))}
-            </div>
-
-            {filteredProjects.length === 0 && (
-              <Card className="p-12 text-center text-muted-foreground">
-                <p className="text-lg">No projects found. Be the first to create one!</p>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="startups">
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-primary mb-4">Explore Startups</h1>
-              <p className="text-muted-foreground mb-6">Register your startup or apply to join existing ones</p>
-              <div className="flex gap-4 flex-wrap items-center">
-                <div className="relative flex-1 max-w-2xl">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search startups..."
-                    className="pl-12 rounded-full"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                <Dialog open={showCreateStartup} onOpenChange={setShowCreateStartup}>
-                  <DialogTrigger asChild>
-                    <Button className="rounded-full shadow-lg hover:shadow-xl transition-all">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Register Startup
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Register Your Startup</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleCreateStartup} className="space-y-4">
-                      <div>
-                        <Label>Startup Name</Label>
-                        <Input
-                          value={newStartup.name}
-                          onChange={(e) => setNewStartup({ ...newStartup, name: e.target.value })}
-                          placeholder="TechStart"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Description</Label>
-                        <Textarea
-                          value={newStartup.description}
-                          onChange={(e) => setNewStartup({ ...newStartup, description: e.target.value })}
-                          placeholder="We're building the future of education..."
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Looking For</Label>
-                        <Input
-                          value={newStartup.lookingFor}
-                          onChange={(e) => setNewStartup({ ...newStartup, lookingFor: e.target.value })}
-                          placeholder="Full-stack Developer, UI/UX Designer"
-                        />
-                      </div>
-                      <Button type="submit" className="w-full">Register Startup</Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredStartups.map((startup) => (
-                <Card key={startup.id} className="p-6 hover:shadow-xl transition-all duration-300 border-2">
-                  <h3 className="text-2xl font-bold text-primary mb-2">{startup.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Founder: <span className="font-semibold">{startup.founder?.full_name || "Unknown"}</span>
-                  </p>
-                  <p className="text-muted-foreground mb-4 line-clamp-3">
-                    {startup.description}
-                  </p>
-                  {startup.looking_for && (
-                    <div className="mb-4 p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-sm font-semibold text-foreground">Looking for:</p>
-                      <p className="text-sm text-secondary-foreground">{startup.looking_for}</p>
-                    </div>
-                  )}
-                  <Button
-                    variant="default"
-                    className="w-full rounded-full"
-                    onClick={() => handleJoinStartup(startup.id)}
-                  >
-                    Apply to Join
-                  </Button>
-                </Card>
-              ))}
-            </div>
-
-            {filteredStartups.length === 0 && (
-              <Card className="p-12 text-center text-muted-foreground">
-                <p className="text-lg">No startups found. Be the first to register yours!</p>
-              </Card>
-            )}
-          </TabsContent>
-        </Tabs>
+      
+      {/* Hero Header ... (Same as before) */}
+      <div className="bg-primary/5 py-16 px-6 text-center border-b">
+        <h1 className="text-4xl font-bold text-primary mb-4">Discover Opportunities</h1>
+        <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+          Collaborate on student projects or join the next big startup.
+        </p>
+        <div className="max-w-2xl mx-auto flex gap-4 flex-col sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input 
+              placeholder="Search by name, skill, or keyword..." 
+              className="pl-10 h-12 rounded-full shadow-sm bg-background"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          {activeTab === 'projects' ? (
+            <Button size="lg" className="rounded-full h-12 px-8" onClick={() => { if(requireLogin()) navigate('/connect/create-project'); }}>
+              <Plus className="mr-2 h-5 w-5" /> Host Project
+            </Button>
+          ) : (
+            <Button size="lg" className="rounded-full h-12 px-8" onClick={() => { if(requireLogin()) navigate('/connect/create-startup'); }}>
+              <Rocket className="mr-2 h-5 w-5" /> Launch Startup
+            </Button>
+          )}
+        </div>
       </div>
 
+      <div className="container mx-auto px-6 py-12">
+        <Tabs defaultValue="projects" value={activeTab} onValueChange={setActiveTab} className="w-full">
+          
+          {/* Controls Row */}
+          <div className="flex flex-col gap-6 mb-8">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <TabsList className="rounded-full p-1 h-auto bg-muted">
+                <TabsTrigger value="projects" className="rounded-full px-6 py-2">Projects</TabsTrigger>
+                <TabsTrigger value="startups" className="rounded-full px-6 py-2">Startups</TabsTrigger>
+              </TabsList>
+
+              {/* NEW: HOST/CONTRIBUTOR TOGGLES */}
+              {user && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground font-medium mr-2">View as:</span>
+                  {activeTab === 'projects' ? (
+                    <ToggleGroup type="single" value={projectViewMode} onValueChange={(v) => v && setProjectViewMode(v)}>
+                      <ToggleGroupItem value="all" className="px-4 py-2 rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                        Contributor
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="hosting" className="px-4 py-2 rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                        Host
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  ) : (
+                    <ToggleGroup type="single" value={startupViewMode} onValueChange={(v) => v && setStartupViewMode(v)}>
+                      <ToggleGroupItem value="all" className="px-4 py-2 rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                        Partner
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="founder" className="px-4 py-2 rounded-full data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                        Founder
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Filters Row */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
+                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" disabled>
+                  <Filter className="h-4 w-4" /> Filter:
+                </Button>
+                {["All", "Tech", "Business", "Design", "Social Impact"].map(cat => (
+                  <Badge 
+                    key={cat} 
+                    variant={category === cat ? "default" : "secondary"}
+                    className="cursor-pointer px-4 py-2 rounded-full whitespace-nowrap hover:opacity-80 transition-opacity"
+                    onClick={() => setCategory(cat)}
+                  >
+                    {cat}
+                  </Badge>
+                ))}
+              </div>
+              <Select value={sort} onValueChange={setSort}>
+                <SelectTrigger className="w-[160px] rounded-full">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* PROJECT CARDS (Using filteredProjects) */}
+          <TabsContent value="projects">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredProjects.length === 0 ? (
+                <div className="col-span-full text-center py-20 bg-muted/30 rounded-xl">
+                  <h3 className="text-lg font-semibold text-primary">No projects found</h3>
+                  <p className="text-muted-foreground">
+                    {projectViewMode === 'hosting' ? "You haven't hosted any projects yet." : "Try adjusting your filters."}
+                  </p>
+                </div>
+              ) : (
+                filteredProjects.map((project) => {
+                  const isJoined = joinedProjectIds.has(project.id);
+                  const isHost = project.host_id === user?.id;
+                  return (
+                    <Card 
+                      key={project.id} 
+                      className="hover:shadow-lg transition-all cursor-pointer group flex flex-col h-full border-muted" 
+                      onClick={() => navigate(`/connect/projects/${project.id}`)}
+                    >
+                      <div className="h-40 w-full overflow-hidden rounded-t-lg bg-secondary relative">
+                        {project.banner_url ? (
+                          <img src={project.banner_url} alt={project.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-muted">
+                            <Users className="h-10 w-10 opacity-20" />
+                          </div>
+                        )}
+                        {isHost && <Badge className="absolute top-3 left-3 bg-blue-600 text-white">Hosting</Badge>}
+                        {isJoined && !isHost && <Badge className="absolute top-3 right-3 bg-green-500 text-white">Joined</Badge>}
+                      </div>
+                      {/* ... rest of card ... */}
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-start mb-1">
+                          <Badge variant="secondary" className="font-normal text-xs">{project.category}</Badge>
+                        </div>
+                        <CardTitle className="text-xl group-hover:text-primary transition-colors line-clamp-1">{project.title}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex-1">
+                        <p className="text-muted-foreground line-clamp-3 text-sm mb-4">{project.description || "No description provided."}</p>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground font-medium">
+                          <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {project.project_members?.[0]?.count || 1} Members</span>
+                        </div>
+                      </CardContent>
+                      <CardFooter className="border-t pt-4 bg-muted/10">
+                        <Button className="w-full rounded-full" variant="secondary">View Details</Button>
+                      </CardFooter>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          </TabsContent>
+
+          {/* STARTUP CARDS (Using filteredStartups) */}
+          <TabsContent value="startups">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredStartups.length === 0 ? (
+                <div className="col-span-full text-center py-20 bg-muted/30 rounded-xl">
+                  <h3 className="text-lg font-semibold text-primary">No startups found</h3>
+                  <p className="text-muted-foreground">
+                    {startupViewMode === 'founder' ? "You haven't registered any startups yet." : "Register yours today!"}
+                  </p>
+                </div>
+              ) : (
+                filteredStartups.map((startup) => {
+                  const isJoined = joinedStartupIds.has(startup.id);
+                  const isFounder = startup.founder_id === user?.id;
+                  return (
+                    <Card 
+                      key={startup.id} 
+                      className="hover:shadow-lg transition-all cursor-pointer group flex flex-col h-full border-muted" 
+                      onClick={() => navigate(`/connect/startups/${startup.id}`)}
+                    >
+                      <div className="h-40 w-full overflow-hidden rounded-t-lg bg-secondary relative">
+                        {startup.banner_url ? (
+                          <img src={startup.banner_url} alt={startup.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-muted">
+                            <Building2 className="h-10 w-10 opacity-20" />
+                          </div>
+                        )}
+                        <Badge className="absolute top-3 left-3 bg-white/90 text-black backdrop-blur-md">{startup.stage}</Badge>
+                        {isFounder && <Badge className="absolute top-3 right-3 bg-purple-600 text-white">Founder</Badge>}
+                        {isJoined && !isFounder && <Badge className="absolute top-3 right-3 bg-green-500 text-white">Partner</Badge>}
+                      </div>
+                      {/* ... rest of card ... */}
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-xl group-hover:text-primary transition-colors flex items-center gap-2">{startup.name}</CardTitle>
+                        <p className="text-xs text-muted-foreground">Founder: {startup.founder?.full_name}</p>
+                      </CardHeader>
+                      <CardContent className="flex-1">
+                        <p className="text-muted-foreground line-clamp-3 text-sm mb-4">{startup.description}</p>
+                      </CardContent>
+                      <CardFooter className="border-t pt-4 bg-muted/10">
+                        <Button className="w-full rounded-full" variant="secondary">View Startup</Button>
+                      </CardFooter>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          </TabsContent>
+
+        </Tabs>
+      </div>
       <Footer />
     </div>
   );
